@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import biryani from "./public/biriyani.png"; 
+import biryani from "./assets/biriyani.png"; 
 
 const INDIA_COORD = [13.054864947131488, 80.2241185689344]; // India
 const ARGENTINA_COORD = [-34.58419557192974, -58.39822695799831]; // Argentina
