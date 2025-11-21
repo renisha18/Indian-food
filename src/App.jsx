@@ -107,7 +107,7 @@ export default function App() {
   const handleOrderClick = () => {
     // If already reached max deliveries, show popup
     if (deliveredCount >= MAX_DELIVERIES) {
-      window.alert("Neeyum Biryani venum na, nerlaa vanga vangi tharenn😏");
+      window.alert("Enum Biryani venum na, nerlaa vanga vangi tharenn😏");
       return;
     }
 
