@@ -1,37 +1,24 @@
 import React, { useState, useRef, useEffect } from "react";
-import { createRoot } from "react-dom/client";
-import {
-  MapContainer,
-  TileLayer,
-  Marker,
-  useMap,
-} from "react-leaflet";
+import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-// NOTE: This file is a single-file React component you can drop into a Vite / CRA project.
-// It uses react-leaflet + Leaflet (install with: npm i react-leaflet leaflet)
+const INDIA_COORD = [13.054864947131488, 80.2241185689344]; // India
+const ARGENTINA_COORD = [-34.58419557192974, -58.39822695799831]; // Argentina
 
-// --- Config: start (India) and end (Argentina) coordinates ---
-const INDIA_COORD = [13.0583, 80.2340]; // approx center of India (lat, lng)
-const ARGENTINA_COORD = [-34.6037, -58.3816]; // Buenos Aires, Argentina (lat, lng)
-
-// Create a big "biriyani bucket" icon using a DivIcon with an emoji.
 function createBucketIcon(scale = 1) {
   return L.icon({
-    iconUrl: "/public/b2.png",  // path inside public folder
-    iconSize: [150 * scale, 150 * scale], // control bucket size
-    iconAnchor: [60 * scale, 60 * scale], // positions bucket on marker center
-    className: "biriyani-icon"
+    iconUrl: "/biriyani.png", // ensure this exists
+    iconSize: [80 * scale, 90 * scale],
+    iconAnchor: [60 * scale, 60 * scale],
+    className: "biriyani-icon",
   });
 }
 
-// Helper: linear interpolation between two numbers
 function lerp(a, b, t) {
   return a + (b - a) * t;
 }
 
-// Component that animates the map view to follow the marker while it moves
 function FollowMarker({ pos }) {
   const map = useMap();
   useEffect(() => {
@@ -42,73 +29,142 @@ function FollowMarker({ pos }) {
 }
 
 export default function App() {
-  const [position, setPosition] = useState(INDIA_COORD);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [scale, setScale] = useState(1);
-  const animationRef = useRef(null);
+  // movingPosition is only non-null while an animation runs
+  const [movingPosition, setMovingPosition] = useState(null);
 
-  // Animate marker from start to end over `durationMs`. Will update position state.
-  const animateBucket = ({ from, to, durationMs = 5000 }) => {
-    if (animationRef.current) clearInterval(animationRef.current);
+  // idle biryani in India (separate marker)
+  const [showIdle, setShowIdle] = useState(true);
+
+  // delivered markers in Argentina (array so they accumulate)
+  const [deliveredMarkers, setDeliveredMarkers] = useState([]);
+
+  // animation state & visual scale for moving marker
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [movingScale, setMovingScale] = useState(1);
+
+  // how many deliveries completed
+  const [deliveredCount, setDeliveredCount] = useState(0);
+  const MAX_DELIVERIES = 5;
+
+  // requestAnimationFrame ref
+  const animRef = useRef(null);
+
+  // animate from -> to
+  const animateBucket = ({ from, to, durationMs = 6000 }) => {
+    // set initial moving position and scale
+    setMovingPosition(from);
+    setMovingScale(1);
     setIsAnimating(true);
 
-    const start = Date.now();
-    const stepMs = 16; // ~60fps
+    const start = performance.now();
 
-    animationRef.current = setInterval(() => {
-      const elapsed = Date.now() - start;
+    const step = (now) => {
+      const elapsed = now - start;
       const t = Math.min(1, elapsed / durationMs);
 
       const lat = lerp(from[0], to[0], t);
       const lng = lerp(from[1], to[1], t);
-      setPosition([lat, lng]);
+      setMovingPosition([lat, lng]);
 
-      // playful scale curve: grow then shrink
       const scaleValue = 1 + 0.6 * Math.sin(Math.PI * t);
-      setScale(scaleValue);
+      setMovingScale(scaleValue);
 
-      if (t >= 1) {
-        clearInterval(animationRef.current);
-        animationRef.current = null;
+      if (t < 1) {
+        animRef.current = requestAnimationFrame(step);
+      } else {
+        // arrived
+        animRef.current = null;
         setIsAnimating(false);
-        // leave marker at destination (or reset after a delay)
+
+        // Add a delivered marker at Argentina (keeps the delivered biryani there)
+        setDeliveredMarkers((prev) => [...prev, to]);
+
+        // update deliveredCount using functional updater to get fresh prev
+        setDeliveredCount((prev) => {
+          const next = prev + 1;
+          // if more deliveries allowed, spawn a new idle biryani in India
+          if (next < MAX_DELIVERIES) {
+            setShowIdle(true);
+          } else {
+            // reached max: no idle left
+            setShowIdle(false);
+          }
+          return next;
+        });
+
+        // stop showing moving marker (it has now become a delivered marker)
+        setMovingPosition(null);
+        setMovingScale(1);
       }
-    }, stepMs);
+    };
+
+    // start loop
+    animRef.current = requestAnimationFrame(step);
   };
 
-  // Button click handler
+  // Order button handler
   const handleOrderClick = () => {
-    // when clicked, animate from India to Argentina
+    // If already reached max deliveries, show popup
+    if (deliveredCount >= MAX_DELIVERIES) {
+      window.alert("Neeyum Biryani venum na, nerlaa vanga vangi tharenn😏");
+      return;
+    }
+
+    // If an animation is running, do nothing
+    if (isAnimating) return;
+
+    // If no idle biryani available, notify user
+    if (!showIdle) {
+      window.alert("No biryani is currently waiting in India — please wait.");
+      return;
+    }
+
+    // spawn animation: hide idle marker and animate from India -> Argentina
+    setShowIdle(false);
     animateBucket({ from: INDIA_COORD, to: ARGENTINA_COORD, durationMs: 6000 });
   };
 
+  // cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (animRef.current) cancelAnimationFrame(animRef.current);
+    };
+  }, []);
+
   return (
-    <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
-      <header style={{ padding: 12, display: "flex", gap: 12, alignItems: "center" }}>
-        <h1 style={{ margin: 0 }}> Order biryani from Indiaa</h1>
+      <div style={{ height: "100vh", display: "flex", flexDirection: "column", padding:" 0px 420px",background:"#FEDF82"}}>
+      <header style={{ padding: 12, display: "flex", gap: 12, alignItems: "center"}}>
+        <h1 style={{ margin: 5,color:"#F32828",fontWeight:"bolder"}}> SS Biryani from India  </h1>
         <div style={{ marginLeft: "auto" }}>
           <button
             onClick={handleOrderClick}
             disabled={isAnimating}
             style={{
-              padding: "10px 18px",
+              padding: "12px 18px",
               fontSize: 16,
               borderRadius: 8,
               border: "none",
               cursor: isAnimating ? "not-allowed" : "pointer",
-              boxShadow: "0 6px 18px rgba(0,0,0,0.12)",
+              boxShadow: "0 6px 18px rgba(0, 0, 0, 0.12)",
+              backgroundColor:"#F32828"
             }}
           >
-            {isAnimating ? "Biriyani is on the way..." : "Order Biriyani"}
+            {isAnimating ? "Biriyani is on the way..." : "Order Now"}
           </button>
         </div>
       </header>
 
-      <main style={{ flex: 1 }}>
+      <main style={{ flex: 1, minHeight: 0 }}>
         <MapContainer
           center={INDIA_COORD}
           zoom={3}
-          style={{ width: "100%", height: "100%" }}
+          style={{
+            width: "100%",
+            height: "100%",
+            borderRadius: "18px",
+            border: "2px solid #800000",
+            boxShadow: "0 6px 18px rgba(0, 0, 0, 0.12)",
+          }}
           scrollWheelZoom={true}
         >
           <TileLayer
@@ -116,22 +172,28 @@ export default function App() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          {/* marker that visually represents the big biriyani bucket */}
-          <Marker
-            position={position}
-            icon={createBucketIcon(scale)}
-            zIndexOffset={1000}
-          />
+          {/* moving marker (only present while animating) */}
+          {movingPosition && (
+            <Marker position={movingPosition} icon={createBucketIcon(movingScale)} zIndexOffset={1000} />
+          )}
 
-          {/* keep the map centered on the marker while it moves (optional). Remove if you want static map. */}
-          <FollowMarker pos={position} />
+          {/* idle biryani waiting in India (separate marker) */}
+          {showIdle && !isAnimating && (
+            <Marker position={INDIA_COORD} icon={createBucketIcon(0.9)} zIndexOffset={500} />
+          )}
+
+          {/* delivered biriyanis that remain in Argentina */}
+          {deliveredMarkers.map((pos, i) => (
+            <Marker key={`del-${i}`} position={pos} icon={createBucketIcon(1)} zIndexOffset={400} />
+          ))}
+
+          <FollowMarker pos={movingPosition || (deliveredMarkers[deliveredMarkers.length - 1] ?? INDIA_COORD)} />
         </MapContainer>
       </main>
 
       <footer style={{ padding: 8, textAlign: "center", fontSize: 13 }}>
-        Click <strong>Order Biriyani</strong> to get a bucket from India to Argentina 🌍
+        Click <strong>Order Biriyani</strong> to get Biryani from Renisha — delivered: {deliveredCount}/{MAX_DELIVERIES}
       </footer>
     </div>
   );
 }
-
