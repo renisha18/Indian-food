@@ -2,13 +2,14 @@ import React, { useState, useRef, useEffect } from "react";
 import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import biryani from "./public/biriyani.png"; 
 
 const INDIA_COORD = [13.054864947131488, 80.2241185689344]; // India
 const ARGENTINA_COORD = [-34.58419557192974, -58.39822695799831]; // Argentina
 
 function createBucketIcon(scale = 1) {
   return L.icon({
-    iconUrl: "/biriyani.png", // ensure this exists
+    iconUrl: biryani, // ensure this exists
     iconSize: [80 * scale, 90 * scale],
     iconAnchor: [60 * scale, 60 * scale],
     className: "biriyani-icon",
